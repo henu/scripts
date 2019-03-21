@@ -2,6 +2,8 @@
 import cv2
 import os
 import magic
+import random
+import subprocess
 import sys
 
 
@@ -35,9 +37,48 @@ def handle_path(path, videofiles):
 
 
 if __name__ == '__main__':
+
+    constant_rate_factor = 32
+
     videofiles = []
     for arg in sys.argv[1:]:
         handle_path(arg, videofiles)
-    print('Top 10 videofiles with worst compression')
-    for videofile in sorted(videofiles, key=lambda t: t[1])[0:10]:
-        print(videofile[0], videofile[1])
+    for videofile in sorted(videofiles, key=lambda t: t[1]):
+        answer = input('Ratio: {:.0f}, path: {}, Convert? [y/N/q] '.format(videofile[1], videofile[0]))
+        if answer == 'q':
+            break
+        if answer == 'y':
+            basename, _ext = os.path.splitext(videofile[0])
+            temp_filename = '{}_temp_{}.mp4'.format(basename, random.randint(1, 99999999))
+            new_filename = '{}.mp4'.format(basename)
+            subprocess.run(
+                [
+                    'ffmpeg',
+                    '-i', videofile[0],
+                    '-vf', 'format=yuv420p',
+                    '-codec:v', 'libx264',
+                    '-crf', str(constant_rate_factor),
+                    '-codec:a', 'aac',
+                    '-vf', 'pad=ceil(iw/2)*2:ceil(ih/2)*2',
+                    temp_filename,
+                ],
+                stdout=subprocess.PIPE,
+            )
+            while True:
+                answer2 = input('Approve? [y/N/p] ')
+                if answer2 == 'y':
+                    os.remove(videofile[0])
+                    os.rename(temp_filename, new_filename)
+                    break
+                if answer2 == 'p':
+                    subprocess.run(
+                        [
+                            'mplayer',
+                            '-fs',
+                            videofile[0], temp_filename,
+                        ],
+                        stdout=subprocess.PIPE,
+                    )
+                else:
+                    os.remove(temp_filename)
+                    break
