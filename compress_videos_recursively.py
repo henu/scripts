@@ -54,6 +54,7 @@ if __name__ == '__main__':
             subprocess.run(
                 [
                     'ffmpeg',
+                    '-loglevel', 'quiet',
                     '-i', videofile[0],
                     '-vf', 'format=yuv420p',
                     '-codec:v', 'libx264',
