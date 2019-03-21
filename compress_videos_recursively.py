@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import cv2
 import os
+import magic
 import sys
 
 
@@ -11,6 +12,11 @@ def handle_path(path, videofiles):
     else:
         file_size = os.path.getsize(path)
         if file_size == 0:
+            return
+
+        # If file is not a video
+        file_mimetype = magic.Magic(magic.MAGIC_MIME).from_file(path)
+        if not file_mimetype.startswith('video/'):
             return
 
         # Get Video details
