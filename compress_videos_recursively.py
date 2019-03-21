@@ -64,8 +64,10 @@ if __name__ == '__main__':
                 ],
                 stdout=subprocess.PIPE,
             )
+            old_file_size = os.path.getsize(videofile[0])
+            new_file_size = os.path.getsize(temp_filename)
             while True:
-                answer2 = input('Approve? [y/N/p] ')
+                answer2 = input('File size reduced {:.0f} %. Approve? [y/N/p] '.format(100 * (1 - new_file_size / old_file_size)))
                 if answer2 == 'y':
                     os.remove(videofile[0])
                     os.rename(temp_filename, new_filename)
