@@ -77,7 +77,7 @@ if __name__ == '__main__':
         new_file_size = os.path.getsize(temp_filename)
 
         # If compression is too bad, then automatically discard
-        if old_file_size * AUTO_DISCARD_RATIO < new_file_size:
+        if new_file_size * AUTO_DISCARD_RATIO > old_file_size:
             print('File size reduced only {:.0f} %, which is too low. Skipping.'.format(100 * (1 - new_file_size / old_file_size)))
             os.remove(temp_filename)
             continue
