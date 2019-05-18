@@ -1,4 +1,7 @@
 #!/usr/bin/python
+# v1.3
+#	Special filename case, where filename has valid data but EXIF is screwed up
+#	Fix re-strings and other little things.
 # v1.2
 #	More exif keys for dates. This makes it possible to handle some videos
 #	too.
@@ -7,13 +10,15 @@
 # v1.0
 #	Basic stuff works
 
-import sys
-import os
-import subprocess
-import re
-import time
 import calendar
+import datetime
+import os
+import pytz
 import random
+import re
+import subprocess
+import sys
+import time
 
 def runCommand(args):
 	p = subprocess.Popen(args, stdout = subprocess.PIPE, stderr = subprocess.PIPE)
@@ -40,14 +45,17 @@ def toUnixTimestamp(year, month, day, hour, minute, second):
 	t = (year, month, day, hour, minute, second, 0, 0, 0)
 	return calendar.timegm(t)
 
-def fromUnixTimestamp(timestamp):
+def fromUnixTimestamp(timestamp, timestamp_in_utc=False):
+	if timestamp_in_utc:
+		dt = datetime.datetime.utcfromtimestamp(timestamp).replace(tzinfo=pytz.UTC)
+		return dt.astimezone(pytz.timezone('Europe/Helsinki')).strftime('%Y-%m-%d %H.%M.%S')
 	t = time.gmtime(timestamp)
 	return time.strftime('%Y-%m-%d %H.%M.%S', t)
 
 # Tries to read date as unix timestamp. Returns -1 if this is impossible
 def tryToReadDate(date_str):
 	# First try with am/pm
-	m = re.match('(?P<year>[0-9]{2,4})[_\-.:](?P<month>[0-9]{1,2})[_\-.:](?P<day>[0-9]{1,2})[_\-.: ](?P<hour>[0-9]{1,2})[_\-.:](?P<min>[0-9]{1,2})[_\-.:](?P<sec>[0-9]{1,2})[_\-.:](?P<ampm>(pm|PM|am|AM))', date_str)
+	m = re.match(r'(?P<year>[0-9]{2,4})[_\-.:](?P<month>[0-9]{1,2})[_\-.:](?P<day>[0-9]{1,2})[_\-.: ](?P<hour>[0-9]{1,2})[_\-.:](?P<min>[0-9]{1,2})[_\-.:](?P<sec>[0-9]{1,2})[_\-.:](?P<ampm>(pm|PM|am|AM))', date_str)
 	if m:
 		# Convert hours to sensible format
 		ampm = m.groupdict()['ampm']
@@ -63,7 +71,14 @@ def tryToReadDate(date_str):
 		if unixtime <= 0: return -1
 		return unixtime
 	# Try without am/pm
-	m = re.match('(?P<year>[0-9]{2,4})[_\-.:](?P<month>[0-9]{1,2})[_\-.:](?P<day>[0-9]{1,2})[_\-.: ](?P<hour>[0-9]{1,2})[_\-.:](?P<min>[0-9]{1,2})[_\-.:](?P<sec>[0-9]{1,2})', date_str)
+	m = re.match(r'(?P<year>[0-9]{2,4})[_\-.:](?P<month>[0-9]{1,2})[_\-.:](?P<day>[0-9]{1,2})[_\-.: ](?P<hour>[0-9]{1,2})[_\-.:](?P<min>[0-9]{1,2})[_\-.:](?P<sec>[0-9]{1,2})', date_str)
+	if m:
+		unixtime = toUnixTimestamp(int(m.groupdict()['year']), int(m.groupdict()['month']), int(m.groupdict()['day']), int(m.groupdict()['hour']), int(m.groupdict()['min']), int(m.groupdict()['sec']))
+		# Discard too old dates
+		if unixtime <= 0: return -1
+		return unixtime
+	# Try without characters between numbers
+	m = re.match(r'(?P<year>[0-9]{4})(?P<month>[0-9]{2})(?P<day>[0-9]{2})[_\-.: ]?(?P<hour>[0-9]{2})(?P<min>[0-9]{2})(?P<sec>[0-9]{2})', date_str)
 	if m:
 		unixtime = toUnixTimestamp(int(m.groupdict()['year']), int(m.groupdict()['month']), int(m.groupdict()['day']), int(m.groupdict()['hour']), int(m.groupdict()['min']), int(m.groupdict()['sec']))
 		# Discard too old dates
@@ -71,13 +86,27 @@ def tryToReadDate(date_str):
 		return unixtime
 	return -1
 
-def tryToGetDateFromFilename(filename):
+def tryToGetDateFromFilenamePrimary(filename):
+	""" This is for some software that screws up the
+	EXIF data, but leaves correct date to filename.
+	"""
+
+	m = re.search(r'InShot_(?P<date>[0-9]{8}_[0-9]{6})[0-9]{3}\.jpg', filename)
+	if m:
+		return m.groupdict()['date']
+	m = re.search(r'org_[0-9a-f]{16}_(?P<unixtime>[0-9]{10})[0-9]{3}(\.|_)', filename)
+	if m:
+		unixtime = int(m.groupdict()['unixtime'])
+		return fromUnixTimestamp(unixtime, timestamp_in_utc=True)
+	return '';
+
+def tryToGetDateFromFilenameSecondary(filename):
 	# First try with am/pm
-	m = re.search('(?P<date>[0-9]{4}[_\-.:][0-9]{2}[_\-.:][0-9]{2}[_\-.: ][0-9]{2}[_\-.:][0-9]{2}[_\-.:][0-9]{2}[_\-.:](pm|PM|am|AM))', filename)
+	m = re.search(r'(?P<date>[0-9]{4}[_\-.:][0-9]{2}[_\-.:][0-9]{2}[_\-.: ][0-9]{2}[_\-.:][0-9]{2}[_\-.:][0-9]{2}[_\-.:](pm|PM|am|AM))', filename)
 	if m:
 		return m.groupdict()['date']
 	# Try without am/pm
-	m = re.search('(?P<date>[0-9]{4}[_\-.:][0-9]{2}[_\-.:][0-9]{2}[_\-.: ][0-9]{2}[_\-.:][0-9]{2}[_\-.:][0-9]{2})', filename)
+	m = re.search(r'(?P<date>[0-9]{4}[_\-.:][0-9]{2}[_\-.:][0-9]{2}[_\-.: ][0-9]{2}[_\-.:][0-9]{2}[_\-.:][0-9]{2})', filename)
 	if m:
 		return m.groupdict()['date']
 	return "";
@@ -100,7 +129,9 @@ def readPhoto(path):
 	cam_id += getMemberAsStringIfExists(exif, 'Serial Number')
 
 	# Get date
-	date = tryToReadDate(getMemberAsStringIfExists(exif, 'Create Date'))
+	date = -1
+	if date < 0: date = tryToReadDate(tryToGetDateFromFilenamePrimary(os.path.basename(path)))
+	if date < 0: date = tryToReadDate(getMemberAsStringIfExists(exif, 'Create Date'))
 	if date < 0: date = tryToReadDate(getMemberAsStringIfExists(exif, 'Date/Time Original'))
 	if date < 0: date = tryToReadDate(getMemberAsStringIfExists(exif, 'Date Time'))
 	if date < 0: date = tryToReadDate(getMemberAsStringIfExists(exif, 'Create Date'))
@@ -110,7 +141,7 @@ def readPhoto(path):
 	if date < 0: date = tryToReadDate(getMemberAsStringIfExists(exif, 'Media Modify Date'))
 	if date < 0: date = tryToReadDate(getMemberAsStringIfExists(exif, 'Track Modify Date'))
 	if date < 0: date = tryToReadDate(getMemberAsStringIfExists(exif, 'File Modification Date/Time'))
-	if date < 0: date = tryToReadDate(tryToGetDateFromFilename(os.path.basename(path)))
+	if date < 0: date = tryToReadDate(tryToGetDateFromFilenameSecondary(os.path.basename(path)))
 	if date < 0: date = 0
 
 	# Form final information
