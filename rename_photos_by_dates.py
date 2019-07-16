@@ -91,6 +91,9 @@ def try_to_get_date_from_filename_primary(filename):
     EXIF data, but leaves correct date to filename.
     """
 
+    m = re.search(r'^(?P<date>[0-9]{8}_[0-9]{6})\.', filename)
+    if m:
+        return m.groupdict()['date']
     m = re.search(r'InShot_(?P<date>[0-9]{8}_[0-9]{6})[0-9]{3}\.jpg', filename)
     if m:
         return m.groupdict()['date']
