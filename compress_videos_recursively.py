@@ -114,7 +114,7 @@ if __name__ == '__main__':
                     stdout=subprocess.PIPE,
                     stderr=subprocess.DEVNULL,
                 )
-            elif answer in ['r', 'R'] or answer == '+' * len(answer) or answer == '-' * len(answer):
+            elif answer in ['r', 'R'] or (answer and (answer == '+' * len(answer) or answer == '-' * len(answer))):
                 if answer == 'r':
                     angle = (angle + 1) % 4
                 elif answer == 'R':
